@@ -1,6 +1,6 @@
 import React, { Component } from "react";
 import SimpleStorageContract from "./build/contracts/SimpleStorage.json";
-import getWeb3 from "./utils/getWeb3";
+import getWeb3 from './utils/getWeb3.js';
 import ipfs from './ipfs'
 
 import "./css/oswald.css"
@@ -18,12 +18,50 @@ class App extends Component {
       ipfsHash: '',
       web3: null,
       buffer: null,
-      account: null
+      accounts: null,
+      contract: null
     }
     this.captureFile = this.captureFile.bind(this);
     this.onSubmit = this.onSubmit.bind(this);
 }
 
+componentDidMount = async () => {
+  try {
+    // Get network provider and web3 instance.
+    const web3 = await getWeb3();
+
+    // Use web3 to get the user's accounts.
+    const accounts = await web3.eth.getAccounts();
+
+    // Get the contract instance.
+    const networkId = await web3.eth.net.getId();
+    const deployedNetwork = SimpleStorageContract.networks[networkId];
+    const instance = new web3.eth.Contract(
+      SimpleStorageContract.abi,
+      deployedNetwork && deployedNetwork.address,
+    );
+
+    // Set web3, accounts, and contract to the state, and then proceed with an
+    // example of interacting with the contract's methods.
+    this.setState({ web3, accounts, contract: instance }, this.runExample);
+  } catch (error) {
+    // Catch any errors for any of the above operations.
+    alert(
+      `Failed to load web3, accounts, or contract. Check console for details.`,
+    );
+    console.error(error);
+  }
+};
+
+runExample = async () => {
+  const { accounts, contract } = this.state;
+
+  // Get the value from the contract to prove it worked.
+  const response = await contract.methods.get().call();
+
+  // Update state with the result.
+  this.setState({ ipfsHash: response });
+};
 
   captureFile(event){
     console.log("Capture file...")
@@ -34,7 +72,7 @@ class App extends Component {
     reader.onloadend = () => {
       this.setState({ buffer: Buffer(reader.result) })
       console.log('buffer', this.state.buffer)
-}
+    }
   }
 
   onSubmit(event){
@@ -45,6 +83,8 @@ class App extends Component {
             console.error(error)
             return
           }
+
+          this.state.contract.methods.set(result[0].hash).send({ from: this.state.accounts[0] });
           this.setState({ ipfsHash: result[0].hash })
           console.log('ifpsHash', this.state.ipfsHash)
     })
